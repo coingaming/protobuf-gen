@@ -33,16 +33,6 @@ pub struct Generator {
 }
 
 impl Generator {
-    fn location(&self) -> &prost_types::source_code_info::Location {
-        let idx = self
-            .source_info
-            .location
-            .binary_search_by_key(&&self.path[..], |location| &location.path[..])
-            .unwrap();
-
-        &self.source_info.location[idx]
-    }
-
     fn inc_indent(&mut self) {
         self.indent.push_str("  ");
     }
@@ -83,6 +73,17 @@ impl Generator {
             }
         }
     }
+
+    fn location(&self) -> &prost_types::source_code_info::Location {
+        let idx = self
+            .source_info
+            .location
+            .binary_search_by_key(&&self.path[..], |location| &location.path[..])
+            .unwrap();
+
+        &self.source_info.location[idx]
+    }
+
 }
 
 
@@ -184,10 +185,13 @@ impl ProtobufString for prost_types::DescriptorProto {
         }
         gen.path.pop();
 
-        gen.path.push(8);
         for (i, oneof) in self.oneof_decl.iter().enumerate() {
+            gen.path.push(8);
             gen.path.push(i as i32);
             gen.write_leading_comment();
+            gen.path.pop();
+            gen.path.pop();
+
             gen.write_indent();
             gen.write("oneof");
             if let Some(ref name) = oneof.name {
@@ -207,9 +211,7 @@ impl ProtobufString for prost_types::DescriptorProto {
             gen.dec_indent();
             gen.write_indent();
             gen.write("}\n");
-            gen.path.pop();
         }
-        gen.path.pop();
 
         // TODO: extension: ::std::vec::Vec<FieldDescriptorProto>,
 
