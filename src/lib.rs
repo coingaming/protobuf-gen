@@ -12,20 +12,30 @@ pub trait ProtobufString {
     fn build_protobuf(&self, gen: &mut Generator);
 
     // #[count_alloc]
-    fn to_protobuf(&self, source_info: prost_types::SourceCodeInfo) -> String {
-        let mut source_info = source_info;
+    fn to_protobuf(&self, file_descriptor: prost_types::FileDescriptorProto) -> String {
+        let syntax = file_descriptor.syntax.map_or(prost_types::Syntax::Proto2, |x| {
+            if x == "proto3" {
+                prost_types::Syntax::Proto3
+            }
+            else {
+                prost_types::Syntax::Proto2
+            }
+        });
+
+        let mut source_info = file_descriptor.source_code_info.unwrap();
         source_info.location.sort_by(|a, b| a.path.cmp(&b.path));
         let mut buf = String::new();
         buf.reserve(2048);
         let path = Vec::with_capacity(10);
         let indent = String::with_capacity(200);
-        let mut gen = Generator{source_info, buf, path, indent};
+        let mut gen = Generator{syntax, source_info, buf, path, indent};
         self.build_protobuf(&mut gen);
         gen.buf
     }
 }
 
 pub struct Generator {
+    syntax: prost_types::Syntax,
     source_info: prost_types::SourceCodeInfo,
     buf: String,
     path: Vec<i32>,
@@ -86,9 +96,57 @@ impl Generator {
 
 }
 
+fn write_field_type(buf: &mut String, field: &prost_types::FieldDescriptorProto) {
+    if let Some(ref type_name) = field.type_name {
+        buf.push_str(type_name);
+    }
+    else if let Some(typ) = field.r#type {
+        if typ >= 1 && typ <= 18 {
+            use prost_types::field_descriptor_proto::Type;
+            match unsafe { std::mem::transmute(typ) } {
+                Type::Double => write!(buf, "{}", "double").unwrap(),
+                Type::Float => write!(buf, "{}", "float").unwrap(),
+                Type::Int64 => write!(buf, "{}", "int64").unwrap(),
+                Type::Uint64 => write!(buf, "{}", "uint64").unwrap(),
+                Type::Int32 => write!(buf, "{}", "int32").unwrap(),
+                Type::Fixed64 => write!(buf, "{}", "fixed64").unwrap(),
+                Type::Fixed32 => write!(buf, "{}", "fixed32").unwrap(),
+                Type::Bool => write!(buf, "{}", "bool").unwrap(),
+                Type::String => write!(buf, "{}", "string").unwrap(),
+                // Tag-delimited aggregate.
+                // Group type is deprecated and not supported in proto3. However, Proto3
+                // implementations should still be able to parse the group wire format and
+                // treat group fields as unknown fields.
+                Type::Group => write!(buf, "{}", "group").unwrap(),
+                // Length-delimited aggregate.
+                Type::Message => write!(buf, "{}", "message").unwrap(),
+                // New in version 2.
+                Type::Bytes => write!(buf, "{}", "bytes").unwrap(),
+                Type::Uint32 => write!(buf, "{}", "uint32").unwrap(),
+                Type::Enum => write!(buf, "{}", "enum").unwrap(),
+                Type::Sfixed32 => write!(buf, "{}", "sfixed32").unwrap(),
+                Type::Sfixed64 => write!(buf, "{}", "sfixed64").unwrap(),
+                Type::Sint32 => write!(buf, "{}", "sint32").unwrap(),
+                Type::Sint64 => write!(buf, "{}", "sint64").unwrap(), 
+            }
+        }
+    }
+}
+
 
 impl ProtobufString for prost_types::FileDescriptorProto {
     fn build_protobuf(&self, gen: &mut Generator) {
+        // The syntax of the proto file.
+        // The supported values are "proto2" and "proto3".
+        if let Some(ref syntax) = self.syntax {
+            gen.path.push(12);
+            gen.write_indent();
+            gen.write("syntax ");
+            gen.write(syntax);
+            gen.write(";\n");
+            gen.path.pop();
+        }
+
         // e.g. "foo", "foo.bar", etc.
         gen.path.push(2);
         if let Some(ref package) = self.package {
@@ -152,16 +210,6 @@ impl ProtobufString for prost_types::FileDescriptorProto {
         // development tools.
         // source_code_info: ::std::option::Option<SourceCodeInfo>,
 
-        // The syntax of the proto file.
-        // The supported values are "proto2" and "proto3".
-        if let Some(ref syntax) = self.syntax {
-            gen.path.push(12);
-            gen.write_indent();
-            gen.write("syntax ");
-            gen.write(syntax);
-            gen.write(";\n");
-            gen.path.pop();
-        }
     }
 }
 
@@ -177,10 +225,40 @@ impl ProtobufString for prost_types::DescriptorProto {
         }
         gen.open_block();
 
+        // needed to handle `Map<Type, Type>` syntax
+        let map_entries: std::collections::HashMap<_, _> = self.nested_type.iter().filter_map(|t| {
+            if t.options.as_ref()?.map_entry? {
+                Some((t.name.as_ref().unwrap(), t))
+            }
+            else {
+                None
+            }
+        }).collect();
+
         gen.path.push(2);
         for (i, field) in self.field.iter().enumerate().filter(|(_, f)| f.oneof_index.is_none()) {
             gen.path.push(i as i32);
-            field.build_protobuf(gen);
+            if let Some(ref type_name) = field.type_name {
+                let sub_type = &type_name[type_name.rfind('.').unwrap() + 1..];
+                if let Some(prost_types::DescriptorProto {field: fields, ..}) = map_entries.get(&sub_type.to_owned()) {
+                    let mut typ = String::with_capacity(32);
+                    typ.push_str("Map<");
+                    write_field_type(&mut typ, fields.get(0).unwrap());
+                    typ.push_str(", ");
+                    write_field_type(&mut  typ, fields.get(1).unwrap());
+                    typ.push_str(">");
+                    let mut field = field.to_owned();
+                    field.type_name = Some(typ);
+                    field.label = None;
+                    field.build_protobuf(gen);
+                }
+                else {
+                    field.build_protobuf(gen);
+                }
+            }
+            else {
+                field.build_protobuf(gen);
+            }
             gen.path.pop();
         }
         gen.path.pop();
@@ -216,7 +294,7 @@ impl ProtobufString for prost_types::DescriptorProto {
         // TODO: extension: ::std::vec::Vec<FieldDescriptorProto>,
 
         gen.path.push(3);
-        for (i, nested_type) in self.nested_type.iter().enumerate() {
+        for (i, nested_type) in self.nested_type.iter().enumerate().filter(|(_, t)| t.options.as_ref().map_or(true, |o| o.map_entry.map_or(true, |e| !e))) {
             gen.path.push(i as i32);
             nested_type.build_protobuf(gen);
             gen.path.pop();
@@ -278,6 +356,7 @@ impl ProtobufString for prost_types::DescriptorProto {
     }
 }
 
+
 impl ProtobufString for prost_types::FieldDescriptorProto {
     fn build_protobuf(&self, gen: &mut Generator) {
         gen.write_leading_comment();
@@ -294,21 +373,27 @@ impl ProtobufString for prost_types::FieldDescriptorProto {
         
         if let Some(label) = self.label {
             if label >= 1 && label <= 3 {
-                let label: prost_types::field_descriptor_proto::Label = unsafe { std::mem::transmute(label) };
-                label.build_protobuf(gen);
-                gen.write(" ");
+                use prost_types::field_descriptor_proto::Label;
+                match unsafe { std::mem::transmute(label) } {
+                    Label::Optional => {
+                        if gen.syntax == prost_types::Syntax::Proto2 {
+                            write!(gen.buf, "{}", "optional").unwrap();
+                            gen.write(" ");
+                        }
+                    },
+                    Label::Required => {
+                        write!(gen.buf, "{}", "required").unwrap();
+                        gen.write(" ");
+                    },
+                    Label::Repeated => {
+                        write!(gen.buf, "{}", "repeated").unwrap();
+                        gen.write(" ");
+                    }
+                }
             }
         }
 
-        if let Some(ref type_name) = self.type_name {
-            gen.write(type_name);
-        }
-        else if let Some(typ) = self.r#type {
-            if typ >= 1 && typ <= 18 {
-                let typ: prost_types::field_descriptor_proto::Type = unsafe { std::mem::transmute(typ) };
-                typ.build_protobuf(gen);
-            }
-        }
+        write_field_type(&mut gen.buf, &self);
         gen.write(" ");
         if let Some(ref name) = self.name {
             gen.write(name);
@@ -487,49 +572,6 @@ impl ProtobufString for prost_types::MethodDescriptorProto {
         gen.write(");\n");
 
         // TODO: options: ::std::option::Option<MethodOptions>,
-    }
-}
-
-impl ProtobufString for prost_types::field_descriptor_proto::Type {
-    fn build_protobuf(&self, gen: &mut Generator) {
-        use prost_types::field_descriptor_proto::Type;
-        match self {
-            Type::Double => write!(gen.buf, "{}", "double").unwrap(),
-            Type::Float => write!(gen.buf, "{}", "float").unwrap(),
-            Type::Int64 => write!(gen.buf, "{}", "int64").unwrap(),
-            Type::Uint64 => write!(gen.buf, "{}", "uint64").unwrap(),
-            Type::Int32 => write!(gen.buf, "{}", "int32").unwrap(),
-            Type::Fixed64 => write!(gen.buf, "{}", "fixed64").unwrap(),
-            Type::Fixed32 => write!(gen.buf, "{}", "fixed32").unwrap(),
-            Type::Bool => write!(gen.buf, "{}", "bool").unwrap(),
-            Type::String => write!(gen.buf, "{}", "string").unwrap(),
-            // Tag-delimited aggregate.
-            // Group type is deprecated and not supported in proto3. However, Proto3
-            // implementations should still be able to parse the group wire format and
-            // treat group fields as unknown fields.
-            Type::Group => write!(gen.buf, "{}", "group").unwrap(),
-            // Length-delimited aggregate.
-            Type::Message => write!(gen.buf, "{}", "message").unwrap(),
-            // New in version 2.
-            Type::Bytes => write!(gen.buf, "{}", "bytes").unwrap(),
-            Type::Uint32 => write!(gen.buf, "{}", "uint32").unwrap(),
-            Type::Enum => write!(gen.buf, "{}", "enum").unwrap(),
-            Type::Sfixed32 => write!(gen.buf, "{}", "sfixed32").unwrap(),
-            Type::Sfixed64 => write!(gen.buf, "{}", "sfixed64").unwrap(),
-            Type::Sint32 => write!(gen.buf, "{}", "sint32").unwrap(),
-            Type::Sint64 => write!(gen.buf, "{}", "sint64").unwrap(), 
-        }
-    }
-}
-
-impl ProtobufString for prost_types::field_descriptor_proto::Label {
-    fn build_protobuf(&self, gen: &mut Generator) {
-        use prost_types::field_descriptor_proto::Label;
-        match self {
-            Label::Optional => write!(gen.buf, "{}", "optional").unwrap(),
-            Label::Required => write!(gen.buf, "{}", "required").unwrap(),
-            Label::Repeated => write!(gen.buf, "{}", "repeated").unwrap(), 
-        }
     }
 }
 
