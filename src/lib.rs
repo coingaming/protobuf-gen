@@ -22,8 +22,14 @@ pub trait ProtobufString {
             }
         });
 
-        let mut source_info = file_descriptor.source_code_info.unwrap();
-        source_info.location.sort_by(|a, b| a.path.cmp(&b.path));
+        let source_info = if let Some(mut source_info) = file_descriptor.source_code_info {
+            source_info.location.sort_by(|a, b| a.path.cmp(&b.path));
+            Some(source_info)
+        }
+        else {
+            None
+        };
+
         let mut buf = String::new();
         buf.reserve(2048);
         let path = Vec::with_capacity(10);
@@ -36,7 +42,7 @@ pub trait ProtobufString {
 
 pub struct Generator {
     syntax: prost_types::Syntax,
-    source_info: prost_types::SourceCodeInfo,
+    source_info: Option<prost_types::SourceCodeInfo>,
     buf: String,
     path: Vec<i32>,
     indent: String,
@@ -71,8 +77,8 @@ impl Generator {
         self.buf.push_str(&self.indent);
     }
 
-    fn write_leading_comment(&mut self) {
-        if let Some(ref comment) = self.location().leading_comments.clone() {
+    fn write_leading_comment(&mut self) -> Option<()> {
+        if let Some(ref comment) = self.location()?.leading_comments.clone() {
             self.buf.push_str("\n");
             for line in comment.lines() {
                 self.buf.push_str(&self.indent);
@@ -82,16 +88,18 @@ impl Generator {
                 self.buf.push_str("\n");
             }
         }
+        Some(())
     }
 
-    fn location(&self) -> &prost_types::source_code_info::Location {
+    fn location(&self) -> Option<&prost_types::source_code_info::Location> {
         let idx = self
             .source_info
+            .as_ref()?
             .location
             .binary_search_by_key(&&self.path[..], |location| &location.path[..])
             .unwrap();
 
-        &self.source_info.location[idx]
+        Some(&self.source_info.as_ref()?.location[idx])
     }
 
 }
