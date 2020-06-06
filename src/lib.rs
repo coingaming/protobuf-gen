@@ -149,9 +149,9 @@ impl ProtobufString for prost_types::FileDescriptorProto {
         if let Some(ref syntax) = self.syntax {
             gen.path.push(12);
             gen.write_indent();
-            gen.write("syntax ");
+            gen.write("syntax = \"");
             gen.write(syntax);
-            gen.write(";\n");
+            gen.write("\";\n");
             gen.path.pop();
         }
 
