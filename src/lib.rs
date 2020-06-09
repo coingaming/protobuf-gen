@@ -1,7 +1,7 @@
 // use alloc_counter::{count_alloc, AllocCounterSystem};
 use prost::Message;
-use std::fs;
 use std::fmt::Write;
+use std::fs;
 use std::path::Path;
 use std::process::Command;
 
@@ -13,20 +13,20 @@ pub trait ProtobufString {
 
     // #[count_alloc]
     fn to_protobuf(&self, file_descriptor: prost_types::FileDescriptorProto) -> String {
-        let syntax = file_descriptor.syntax.map_or(prost_types::Syntax::Proto2, |x| {
-            if x == "proto3" {
-                prost_types::Syntax::Proto3
-            }
-            else {
-                prost_types::Syntax::Proto2
-            }
-        });
+        let syntax = file_descriptor
+            .syntax
+            .map_or(prost_types::Syntax::Proto2, |x| {
+                if x == "proto3" {
+                    prost_types::Syntax::Proto3
+                } else {
+                    prost_types::Syntax::Proto2
+                }
+            });
 
         let source_info = if let Some(mut source_info) = file_descriptor.source_code_info {
             source_info.location.sort_by(|a, b| a.path.cmp(&b.path));
             Some(source_info)
-        }
-        else {
+        } else {
             None
         };
 
@@ -34,7 +34,13 @@ pub trait ProtobufString {
         buf.reserve(2048);
         let path = Vec::with_capacity(10);
         let indent = String::with_capacity(200);
-        let mut gen = Generator{syntax, source_info, buf, path, indent};
+        let mut gen = Generator {
+            syntax,
+            source_info,
+            buf,
+            path,
+            indent,
+        };
         self.build_protobuf(&mut gen);
         gen.buf
     }
@@ -87,8 +93,10 @@ impl Generator {
                 self.buf.push_str(line);
                 self.buf.push_str("\n");
             }
+            Some(())
+        } else {
+            None
         }
-        Some(())
     }
 
     fn location(&self) -> Option<&prost_types::source_code_info::Location> {
@@ -101,14 +109,12 @@ impl Generator {
 
         Some(&self.source_info.as_ref()?.location[idx])
     }
-
 }
 
 fn write_field_type(buf: &mut String, field: &prost_types::FieldDescriptorProto) {
     if let Some(ref type_name) = field.type_name {
         buf.push_str(type_name);
-    }
-    else if let Some(typ) = field.r#type {
+    } else if let Some(typ) = field.r#type {
         if typ >= 1 && typ <= 18 {
             use prost_types::field_descriptor_proto::Type;
             match unsafe { std::mem::transmute(typ) } {
@@ -135,12 +141,11 @@ fn write_field_type(buf: &mut String, field: &prost_types::FieldDescriptorProto)
                 Type::Sfixed32 => write!(buf, "{}", "sfixed32").unwrap(),
                 Type::Sfixed64 => write!(buf, "{}", "sfixed64").unwrap(),
                 Type::Sint32 => write!(buf, "{}", "sint32").unwrap(),
-                Type::Sint64 => write!(buf, "{}", "sint64").unwrap(), 
+                Type::Sint64 => write!(buf, "{}", "sint64").unwrap(),
             }
         }
     }
 }
-
 
 impl ProtobufString for prost_types::FileDescriptorProto {
     fn build_protobuf(&self, gen: &mut Generator) {
@@ -217,13 +222,14 @@ impl ProtobufString for prost_types::FileDescriptorProto {
         // functionality of the descriptors -- the information is needed only by
         // development tools.
         // source_code_info: ::std::option::Option<SourceCodeInfo>,
-
     }
 }
 
 impl ProtobufString for prost_types::DescriptorProto {
     fn build_protobuf(&self, gen: &mut Generator) {
-        gen.write_leading_comment();
+        if gen.write_leading_comment().is_none() {
+            gen.write("\n");
+        }
 
         gen.write_indent();
         gen.write("message");
@@ -234,37 +240,45 @@ impl ProtobufString for prost_types::DescriptorProto {
         gen.open_block();
 
         // needed to handle `Map<Type, Type>` syntax
-        let map_entries: std::collections::HashMap<_, _> = self.nested_type.iter().filter_map(|t| {
-            if t.options.as_ref()?.map_entry? {
-                Some((t.name.as_ref().unwrap(), t))
-            }
-            else {
-                None
-            }
-        }).collect();
+        let map_entries: std::collections::HashMap<_, _> = self
+            .nested_type
+            .iter()
+            .filter_map(|t| {
+                if t.options.as_ref()?.map_entry? {
+                    Some((t.name.as_ref().unwrap(), t))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         gen.path.push(2);
-        for (i, field) in self.field.iter().enumerate().filter(|(_, f)| f.oneof_index.is_none()) {
+        for (i, field) in self
+            .field
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| f.oneof_index.is_none())
+        {
             gen.path.push(i as i32);
             if let Some(ref type_name) = field.type_name {
                 let sub_type = &type_name[type_name.rfind('.').unwrap() + 1..];
-                if let Some(prost_types::DescriptorProto {field: fields, ..}) = map_entries.get(&sub_type.to_owned()) {
+                if let Some(prost_types::DescriptorProto { field: fields, .. }) =
+                    map_entries.get(&sub_type.to_owned())
+                {
                     let mut typ = String::with_capacity(32);
                     typ.push_str("Map<");
                     write_field_type(&mut typ, fields.get(0).unwrap());
                     typ.push_str(", ");
-                    write_field_type(&mut  typ, fields.get(1).unwrap());
+                    write_field_type(&mut typ, fields.get(1).unwrap());
                     typ.push_str(">");
                     let mut field = field.to_owned();
                     field.type_name = Some(typ);
                     field.label = None;
                     field.build_protobuf(gen);
-                }
-                else {
+                } else {
                     field.build_protobuf(gen);
                 }
-            }
-            else {
+            } else {
                 field.build_protobuf(gen);
             }
             gen.path.pop();
@@ -287,7 +301,12 @@ impl ProtobufString for prost_types::DescriptorProto {
             gen.write(" {\n");
             gen.inc_indent();
             gen.path.push(2);
-            for (i, field) in self.field.iter().enumerate().filter(|(_, f)| f.oneof_index.map_or(false, |j| j == i as i32)) {
+            for (i, field) in self
+                .field
+                .iter()
+                .enumerate()
+                .filter(|(_, f)| f.oneof_index.map_or(false, |j| j == i as i32))
+            {
                 gen.path.push(i as i32);
                 field.build_protobuf(gen);
                 gen.path.pop();
@@ -302,13 +321,17 @@ impl ProtobufString for prost_types::DescriptorProto {
         // TODO: extension: ::std::vec::Vec<FieldDescriptorProto>,
 
         gen.path.push(3);
-        for (i, nested_type) in self.nested_type.iter().enumerate().filter(|(_, t)| t.options.as_ref().map_or(true, |o| o.map_entry.map_or(true, |e| !e))) {
+        for (i, nested_type) in self.nested_type.iter().enumerate().filter(|(_, t)| {
+            t.options
+                .as_ref()
+                .map_or(true, |o| o.map_entry.map_or(true, |e| !e))
+        }) {
             gen.path.push(i as i32);
             nested_type.build_protobuf(gen);
             gen.path.pop();
         }
         gen.path.pop();
-        
+
         gen.path.push(4);
         for (i, enum_type) in self.enum_type.iter().enumerate() {
             gen.path.push(i as i32);
@@ -319,7 +342,7 @@ impl ProtobufString for prost_types::DescriptorProto {
 
         // TODO: extension_range: ::std::vec::Vec<descriptor_proto::ExtensionRange>,
         // TODO: options: ::std::option::Option<MessageOptions>,
-        
+
         if self.reserved_name.len() > 0 {
             gen.write_leading_comment();
             gen.write_indent();
@@ -338,13 +361,12 @@ impl ProtobufString for prost_types::DescriptorProto {
                 // Exclusive.
                 if let Some(ref end) = range.end {
                     write!(gen.buf, "{}", end).unwrap();
-                }
-                else {
+                } else {
                     gen.write("max");
                 }
             }
         }
-        
+
         // Reserved field names, which may not be used by fields in the same message.
         // A given name may only be reserved once.
         if self.reserved_name.len() > 0 {
@@ -364,7 +386,6 @@ impl ProtobufString for prost_types::DescriptorProto {
     }
 }
 
-
 impl ProtobufString for prost_types::FieldDescriptorProto {
     fn build_protobuf(&self, gen: &mut Generator) {
         gen.write_leading_comment();
@@ -372,13 +393,13 @@ impl ProtobufString for prost_types::FieldDescriptorProto {
         gen.write_indent();
         // If type_name is set, this need not be set.  If both this and type_name
         // are set, this must be one of TYPE_ENUM, TYPE_MESSAGE or TYPE_GROUP.
-        
+
         // For message and enum types, this is the name of the type.  If the name
         // starts with a '.', it is fully-qualified.  Otherwise, C++-like scoping
         // rules are used to find the type (i.e. first the nested types within this
         // message are searched, then within the parent, on up to the root
         // namespace).
-        
+
         if let Some(label) = self.label {
             if label >= 1 && label <= 3 {
                 use prost_types::field_descriptor_proto::Label;
@@ -388,11 +409,11 @@ impl ProtobufString for prost_types::FieldDescriptorProto {
                             write!(gen.buf, "{}", "optional").unwrap();
                             gen.write(" ");
                         }
-                    },
+                    }
                     Label::Required => {
                         write!(gen.buf, "{}", "required").unwrap();
                         gen.write(" ");
-                    },
+                    }
                     Label::Repeated => {
                         write!(gen.buf, "{}", "repeated").unwrap();
                         gen.write(" ");
@@ -439,7 +460,9 @@ impl ProtobufString for prost_types::FieldDescriptorProto {
 
 impl ProtobufString for prost_types::EnumDescriptorProto {
     fn build_protobuf(&self, gen: &mut Generator) {
-        gen.write_leading_comment();
+        if gen.write_leading_comment().is_none() {
+            gen.write("\n");
+        }
 
         gen.write_indent();
         gen.write("enum");
@@ -480,13 +503,12 @@ impl ProtobufString for prost_types::EnumDescriptorProto {
                 // Exclusive.
                 if let Some(ref end) = range.end {
                     write!(gen.buf, "{}", end).unwrap();
-                }
-                else {
+                } else {
                     gen.write("max");
                 }
             }
         }
-       
+
         // Reserved enum value names, which may not be reused. A given name may only
         // be reserved once.
         if self.reserved_name.len() > 0 {
@@ -501,7 +523,6 @@ impl ProtobufString for prost_types::EnumDescriptorProto {
             }
             gen.write(";\n");
         }
-
 
         gen.close_block();
     }
@@ -527,7 +548,9 @@ impl ProtobufString for prost_types::EnumValueDescriptorProto {
 
 impl ProtobufString for prost_types::ServiceDescriptorProto {
     fn build_protobuf(&self, gen: &mut Generator) {
-        gen.write_leading_comment();
+        if gen.write_leading_comment().is_none() {
+            gen.write("\n");
+        }
 
         gen.write_indent();
         gen.write("service");
