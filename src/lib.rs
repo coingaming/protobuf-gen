@@ -156,7 +156,7 @@ impl ProtobufString for prost_types::FileDescriptorProto {
             gen.write_indent();
             gen.write("syntax = \"");
             gen.write(syntax);
-            gen.write("\";\n");
+            gen.write("\";\n\n");
             gen.path.pop();
         }
 
@@ -166,7 +166,7 @@ impl ProtobufString for prost_types::FileDescriptorProto {
             gen.write_indent();
             gen.write("package ");
             gen.write(package);
-            gen.write(";\n");
+            gen.write(";\n\n");
         }
         gen.path.pop();
 
