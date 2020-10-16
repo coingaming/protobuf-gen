@@ -594,7 +594,7 @@ impl ProtobufString for prost_types::MethodDescriptorProto {
             gen.write(typ);
         }
         gen.write(") returns (");
-        if let Some(true) = self.client_streaming {
+        if let Some(true) = self.server_streaming {
             gen.write("stream ");
         }
         if let Some(ref typ) = self.output_type {
