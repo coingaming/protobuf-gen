@@ -89,7 +89,6 @@ impl Generator {
             for line in comment.lines() {
                 self.buf.push_str(&self.indent);
                 self.buf.push_str("//");
-                let line = line.clone();
                 self.buf.push_str(line);
                 self.buf.push_str("\n");
             }
@@ -100,14 +99,16 @@ impl Generator {
     }
 
     fn location(&self) -> Option<&prost_types::source_code_info::Location> {
-        let idx = self
+        let comment = self
             .source_info
             .as_ref()?
             .location
-            .binary_search_by_key(&&self.path[..], |location| &location.path[..])
-            .unwrap();
+            .binary_search_by_key(&&self.path[..], |location| &location.path[..]);
 
-        Some(&self.source_info.as_ref()?.location[idx])
+        match comment {
+            Ok(idx) => Some(&self.source_info.as_ref()?.location[idx]),
+            Err(_) => None,
+        }
     }
 }
 
