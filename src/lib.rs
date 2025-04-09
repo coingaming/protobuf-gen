@@ -99,14 +99,14 @@ impl Generator {
     }
 
     fn location(&self) -> Option<&prost_types::source_code_info::Location> {
-        let comment = self
+        let location = self
             .source_info
             .as_ref()?
             .location
             .binary_search_by_key(&&self.path[..], |location| &location.path[..]);
 
-        match comment {
-            Ok(idx) => Some(&self.source_info.as_ref()?.location[idx]),
+        match location {
+            Ok(location_idx) => Some(&self.source_info.as_ref()?.location[location_idx]),
             Err(_) => None,
         }
     }
