@@ -164,6 +164,7 @@ impl ProtobufString for prost_types::FileDescriptorProto {
         // e.g. "foo", "foo.bar", etc.
         gen.path.push(2);
         if let Some(ref package) = self.package {
+            gen.write_leading_comment();
             gen.write_indent();
             gen.write("package ");
             gen.write(package);
