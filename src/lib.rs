@@ -89,7 +89,6 @@ impl Generator {
             for line in comment.lines() {
                 self.buf.push_str(&self.indent);
                 self.buf.push_str("//");
-                let line = line.clone();
                 self.buf.push_str(line);
                 self.buf.push_str("\n");
             }
@@ -100,14 +99,16 @@ impl Generator {
     }
 
     fn location(&self) -> Option<&prost_types::source_code_info::Location> {
-        let idx = self
+        let location = self
             .source_info
             .as_ref()?
             .location
-            .binary_search_by_key(&&self.path[..], |location| &location.path[..])
-            .unwrap();
+            .binary_search_by_key(&&self.path[..], |location| &location.path[..]);
 
-        Some(&self.source_info.as_ref()?.location[idx])
+        match location {
+            Ok(location_idx) => Some(&self.source_info.as_ref()?.location[location_idx]),
+            Err(_) => None,
+        }
     }
 }
 
@@ -163,6 +164,7 @@ impl ProtobufString for prost_types::FileDescriptorProto {
         // e.g. "foo", "foo.bar", etc.
         gen.path.push(2);
         if let Some(ref package) = self.package {
+            gen.write_leading_comment();
             gen.write_indent();
             gen.write("package ");
             gen.write(package);

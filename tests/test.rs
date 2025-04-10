@@ -23,4 +23,3 @@ fn it_is_idempotent() {
         assert!(expected == actual);
     }
 }
-
