@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package example.user;
+
+message User {
+  int32 id = 1;
+  string name = 2;
+  string email = 3;
+  repeated string tags = 4;
+  Address address = 5;
+}
+
+message Address {
+  string street = 1;
+  string city = 2;
+  string country = 3; // Already using regular string type
+  int32 zip_code = 4;
+}
+
+message UserList {
+  repeated User users = 1;
+  string list_name = 2;
+}
