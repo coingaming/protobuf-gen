@@ -1,14 +1,13 @@
 use protobuf_gen::{read_files, ProtobufString};
+use pretty_assertions::assert_eq;
 
 #[test]
 fn it_works() {
     let descriptor_set = read_files(&["tests/source.proto"], &["tests/"]);
     for file in descriptor_set.file.iter() {
-        let actual = file.to_protobuf(file.source_code_info.to_owned().unwrap());
+        let actual = file.to_protobuf(file.clone());
         let expected = std::fs::read_to_string("tests/expected.proto").unwrap();
-        // eprintln!("ACTUAL:\n\n{}", actual);
-        // eprintln!("EXPECTED:\n\n{}", expected);
-        assert!(expected == actual);
+        assert_eq!(expected, actual);
     }
 }
 
@@ -16,10 +15,8 @@ fn it_works() {
 fn it_is_idempotent() {
     let descriptor_set = read_files(&["tests/expected.proto"], &["tests/"]);
     for file in descriptor_set.file.iter() {
-        let actual = file.to_protobuf(file.source_code_info.to_owned().unwrap());
+        let actual = file.to_protobuf(file.clone());
         let expected = std::fs::read_to_string("tests/expected.proto").unwrap();
-        // eprintln!("ACTUAL:\n\n{}", actual);
-        // eprintln!("EXPECTED:\n\n{}", expected);
-        assert!(expected == actual);
+        assert_eq!(expected, actual);
     }
 }

@@ -1,5 +1,6 @@
 package google.protobuf;
 
+
 // The protocol compiler can output a FileDescriptorSet containing the .proto
 // files it parses.
 message FileDescriptorSet {
@@ -54,6 +55,7 @@ message DescriptorProto {
   // Reserved field names, which may not be used by fields in the same message.
   // A given name may only be reserved once.
   repeated string reserved_name = 10;
+
   message ExtensionRange {
     optional int32 start = 1;
     optional int32 end = 2;
@@ -68,6 +70,7 @@ message DescriptorProto {
     optional int32 end = 2;
   }
 }
+
 message ExtensionRangeOptions {
 
   // The parser stores options it doesn't recognize here. See above.
@@ -112,6 +115,7 @@ message FieldDescriptorProto {
   // it to camelCase.
   optional string json_name = 10;
   optional .google.protobuf.FieldOptions options = 8;
+
   enum Type {
 
     // 0 is reserved for errors.
@@ -148,6 +152,7 @@ message FieldDescriptorProto {
     TYPE_SINT32 = 17;
     TYPE_SINT64 = 18;
   }
+
   enum Label {
 
     // 0 is reserved for errors
@@ -220,6 +225,7 @@ message MethodDescriptorProto {
   // Identifies if server streams multiple server messages
   optional bool server_streaming = 6;
 }
+
 message FileOptions {
 
   // Sets the Java package where classes generated from this .proto will be
@@ -332,6 +338,7 @@ message FileOptions {
     LITE_RUNTIME = 3;
   }
 }
+
 message MessageOptions {
 
   // Set true to use the old proto1 MessageSet wire format for extensions.
@@ -391,6 +398,7 @@ message MessageOptions {
   // The parser stores options it doesn't recognize here. See above.
   repeated .google.protobuf.UninterpretedOption uninterpreted_option = 999;
 }
+
 message FieldOptions {
 
   // The ctype option instructs the C++ code generator to use a different
@@ -460,6 +468,7 @@ message FieldOptions {
 
   // The parser stores options it doesn't recognize here. See above.
   repeated .google.protobuf.UninterpretedOption uninterpreted_option = 999;
+
   enum CType {
 
     // Default mode.
@@ -467,6 +476,7 @@ message FieldOptions {
     CORD = 1;
     STRING_PIECE = 2;
   }
+
   enum JSType {
 
     // Use the default type.
@@ -479,11 +489,13 @@ message FieldOptions {
     JS_NUMBER = 2;
   }
 }
+
 message OneofOptions {
 
   // The parser stores options it doesn't recognize here. See above.
   repeated .google.protobuf.UninterpretedOption uninterpreted_option = 999;
 }
+
 message EnumOptions {
 
   // Set this option to true to allow mapping different tag names to the same
@@ -499,6 +511,7 @@ message EnumOptions {
   // The parser stores options it doesn't recognize here. See above.
   repeated .google.protobuf.UninterpretedOption uninterpreted_option = 999;
 }
+
 message EnumValueOptions {
 
   // Is this enum value deprecated?
@@ -510,6 +523,7 @@ message EnumValueOptions {
   // The parser stores options it doesn't recognize here. See above.
   repeated .google.protobuf.UninterpretedOption uninterpreted_option = 999;
 }
+
 message ServiceOptions {
 
   // Is this service deprecated?
@@ -521,6 +535,7 @@ message ServiceOptions {
   // The parser stores options it doesn't recognize here. See above.
   repeated .google.protobuf.UninterpretedOption uninterpreted_option = 999;
 }
+
 message MethodOptions {
 
   // Is this method deprecated?
@@ -620,6 +635,7 @@ message SourceCodeInfo {
   //   ignore those that it doesn't understand, as more types of locations could
   //   be recorded in the future.
   repeated .google.protobuf.SourceCodeInfo.Location location = 1;
+
   message Location {
 
     // Identifies which part of the FileDescriptorProto was defined at this
@@ -715,6 +731,7 @@ message GeneratedCodeInfo {
   // An Annotation connects some span of text in generated code to an element
   // of its generating .proto file.
   repeated .google.protobuf.GeneratedCodeInfo.Annotation annotation = 1;
+
   message Annotation {
 
     // Identifies the element in the original source .proto file. This field

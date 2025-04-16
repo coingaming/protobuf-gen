@@ -11,3 +11,4 @@ prost = "0.6.1"
 tempfile = "3"
 
 [dev-dependencies]
+pretty_assertions = "1.4.0"
