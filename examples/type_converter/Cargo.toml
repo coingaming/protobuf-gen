@@ -1,0 +1,9 @@
+[package]
+name = "type_converter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+protobuf-gen = { path = "../.." }
+prost-types = "0.13.5"
+prost = "0.13.5"
