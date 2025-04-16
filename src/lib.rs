@@ -410,6 +410,11 @@ impl ProtobufString for prost_types::FieldDescriptorProto {
                         if gen.syntax == prost_types::Syntax::Proto2 {
                             write!(gen.buf, "{}", "optional").unwrap();
                             gen.write(" ");
+                        } else if gen.syntax == prost_types::Syntax::Proto3 {
+                            if let Some(true) = self.proto3_optional {
+                                write!(gen.buf, "{}", "optional").unwrap();
+                                gen.write(" ");
+                            }
                         }
                     }
                     Label::Required => {
